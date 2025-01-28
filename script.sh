@@ -3,11 +3,11 @@
 # === Конфигурация по умолчанию ===
 DEFAULT_CONDA_ENV_NAME="ont_cluster"
 DEFAULT_CONDA_DIR="$HOME/miniconda3"
-DEFAULT_DB_PATH="/home/tagir/ncbi-blast-2.16.0+/dataUnite/refUNITE"
-DEFAULT_RESULT_PATH="/home/tagir/work/result"
-DEFAULT_WORK_DIR="/home/tagir/work/ont_clustering"
-DEFAULT_SEQUENCES_DIR="/home/tagir/work/sequences"
-DEFAULT_TRIM_DIR="/home/tagir/work/trim_sequences"
+DEFAULT_DB_PATH=""
+DEFAULT_RESULT_DIR="result"
+DEFAULT_CLUSTER_DIR="ont_clustering"
+DEFAULT_SEQUENCES_DIR="sequences"
+DEFAULT_TRIM_DIR="trim_sequences"
 
 # === Функции ===
 
@@ -19,14 +19,13 @@ show_help() {
     echo "  --conda-env      Имя окружения Conda (по умолчанию: $DEFAULT_CONDA_ENV_NAME)"
     echo "  --conda-dir      Путь к Conda (по умолчанию: $DEFAULT_CONDA_DIR)"
     echo "  --db-path        Путь к базе данных BLAST (по умолчанию: $DEFAULT_DB_PATH)"
-    echo "  --result-path    Директория для сохранения результатов (по умолчанию: $DEFAULT_RESULT_PATH)"
-    echo "  --work-dir       Рабочая директория с кластерными данными (по умолчанию: $DEFAULT_WORK_DIR)"
+    echo "  --result-dir     Директория для сохранения результатов (по умолчанию: $DEFAULT_RESULT_DIR)"
+    echo "  --cluster-dir    Рабочая директория с кластерными данными (по умолчанию: $DEFAULT_CLUSTER_DIR)"
     echo "  --sequences-dir  Директория с исходными FASTQ-файлами (по умолчанию: $DEFAULT_SEQUENCES_DIR)"
     echo "  --trim-dir       Директория для обрезанных FASTQ-файлов (по умолчанию: $DEFAULT_TRIM_DIR)"
     echo "  -h, --help       Показать эту справку и выйти"
 }
 
-# Проверка существования директории
 check_directory() {
     local dir="$1"
     local description="$2"
@@ -36,7 +35,6 @@ check_directory() {
     fi
 }
 
-# Обрезка FASTQ-файлов
 trim_sequences() {
     local sequences_dir="$1"
     local trim_dir="$2"
@@ -54,7 +52,6 @@ trim_sequences() {
             continue
         fi
 
-        # Обрезка последовательностей
         exec 3>"$output_file"
         while IFS= read -r id && IFS= read -r seq && IFS= read -r plus && IFS= read -r score; do
             trimmed_seq="${seq:80}"
@@ -70,9 +67,8 @@ trim_sequences() {
     done
 }
 
-# Кластеризация данных
 cluster_data() {
-    local work_dir="$1"
+    local cluster_dir="$1"
     local trim_dir="$2"
     local conda_env="$3"
     local conda_dir="$4"
@@ -81,7 +77,7 @@ cluster_data() {
     conda activate "$conda_env"
 
     for ((i = 2; i < 12; i++)); do
-        cd "$work_dir"
+        cd "$cluster_dir"
         local input_file="${trim_dir}/trim_${i}.fastq"
 
         echo "Clustering ${i}.fastq..."
@@ -110,15 +106,15 @@ cluster_data() {
 
 # Выравнивание с помощью BLAST
 align_sequences() {
-    local work_dir="$1"
-    local result_path="$2"
+    local cluster_dir="$1"
+    local result_dir="$2"
     local db_path="$3"
 
-    check_directory "$result_path" "результатов BLAST"
+    check_directory "$result_dir" "результатов BLAST"
 
     for ((i = 2; i < 12; i++)); do
-        local cluster_dir="${work_dir}/${i}_clusters"
-        local aligns_file="${result_path}/aligns_${i}.tsv"
+        local cluster_dir="${cluster_dir}/${i}_clusters"
+        local aligns_file="${result_dir}/aligns_${i}.tsv"
 
         if [[ ! -d "$cluster_dir" ]]; then
             echo "Warning: Directory ${cluster_dir} does not exist, skipping."
@@ -158,8 +154,8 @@ main() {
     CONDA_ENV_NAME="$DEFAULT_CONDA_ENV_NAME"
     CONDA_DIR="$DEFAULT_CONDA_DIR"
     DB_PATH="$DEFAULT_DB_PATH"
-    RESULT_PATH="$DEFAULT_RESULT_PATH"
-    WORK_DIR="$DEFAULT_WORK_DIR"
+    RESULT_DIR="$DEFAULT_RESULT_DIR"
+    cluster_dir="$DEFAULT_cluster_dir"
     SEQUENCES_DIR="$DEFAULT_SEQUENCES_DIR"
     TRIM_DIR="$DEFAULT_TRIM_DIR"
 
@@ -169,8 +165,8 @@ main() {
             --conda-env) CONDA_ENV_NAME="$2"; shift 2 ;;
             --conda-dir) CONDA_DIR="$2"; shift 2 ;;
             --db-path) DB_PATH="$2"; shift 2 ;;
-            --result-path) RESULT_PATH="$2"; shift 2 ;;
-            --work-dir) WORK_DIR="$2"; shift 2 ;;
+            --result-path) RESULT_DIR="$2"; shift 2 ;;
+            --cluster-dir) cluster_dir="$2"; shift 2 ;;
             --sequences-dir) SEQUENCES_DIR="$2"; shift 2 ;;
             --trim-dir) TRIM_DIR="$2"; shift 2 ;;
             -h|--help) show_help; exit 0 ;;
@@ -180,8 +176,8 @@ main() {
 
     # Выполнение этапов
     trim_sequences "$SEQUENCES_DIR" "$TRIM_DIR"
-    cluster_data "$WORK_DIR" "$TRIM_DIR" "$CONDA_ENV_NAME" "$CONDA_DIR"
-    align_sequences "$WORK_DIR" "$RESULT_PATH" "$DB_PATH"
+    cluster_data "$cluster_dir" "$TRIM_DIR" "$CONDA_ENV_NAME" "$CONDA_DIR"
+    align_sequences "$cluster_dir" "$RESULT_DIR" "$DB_PATH"
 }
 
 main "$@"
